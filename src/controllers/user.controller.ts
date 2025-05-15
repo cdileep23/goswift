@@ -7,8 +7,7 @@ import axios from "axios";
 import { Comment, Post, User } from "../utils/constant";
 import NodeCache from "node-cache";
 
-const cache = new NodeCache({ stdTTL: 60 * 5 });
-
+const cache = new NodeCache({ stdTTL: 60 * 10 });
 
 interface Params {
   userId: string;
@@ -16,6 +15,15 @@ interface Params {
 
 interface UserWithPosts extends User {
   posts?: Post[];
+}
+interface usersArray {
+  users: UserWithPosts[];
+  message: string;
+  success: true;
+
+  total: number;
+  page: number;
+  limit: number;
 }
 
 interface SuccessResponse {
@@ -29,28 +37,23 @@ interface ErrorResponse {
   success: false;
 }
 
-
-
-
-
-
 export const getUserByUserId = async (
   req: Request<Params>,
-  res: Response<SuccessResponse|ErrorResponse>
+  res: Response<SuccessResponse | ErrorResponse>
 ): Promise<any> => {
   try {
     const userId = req.params.userId;
     const cacheKey = `user-${userId}`;
 
-   const userExists = await UserModel.findOne({ id: parseInt(userId) }).lean();
-   if (!userExists) {
-     return res.status(404).json({
-       message: "User not found",
-       success: false,
-     });
-   }
+    const userExists = await UserModel.findOne({ id: parseInt(userId) });
+    if (!userExists) {
+      return res.status(404).json({
+        message: "User not found",
+        success: false,
+      });
+    }
     const cachedUser = cache.get<UserWithPosts>(cacheKey);
-    console.log(cachedUser)
+
     if (cachedUser) {
       return res.status(200).json({
         success: true,
@@ -59,10 +62,6 @@ export const getUserByUserId = async (
       });
     }
 
-    
-    
-
-  
     const posts = await postModel.find({ userId: parseInt(userId) });
 
     const data = {
@@ -70,7 +69,6 @@ export const getUserByUserId = async (
       posts,
     };
 
- 
     cache.set(cacheKey, data);
 
     return res.status(200).json({
@@ -87,9 +85,8 @@ export const getUserByUserId = async (
   }
 };
 
-
 export const loadData = async (
-  req: Request<{}, {}, {}, {}>, 
+  req: Request<{}, {}, {}, {}>,
   res: Response<{ message: string; success: boolean }>
 ): Promise<any> => {
   try {
@@ -103,10 +100,7 @@ export const loadData = async (
       "https://jsonplaceholder.typicode.com/comments"
     );
 
-    await UserModel.deleteMany();
-    await postModel.deleteMany();
-    await commentModel.deleteMany();
-    console.log("Deleted existing data");
+   
 
     const comments: Comment[] = commentsResponse.data;
     await commentModel.insertMany(comments);
@@ -140,60 +134,63 @@ export const loadData = async (
   }
 };
 
+export const deleteAllUsers = async (
+  req: Request,
+  res: Response<{ message: String; success: boolean }>
+): Promise<any> => {
+  try {
+    const resposeUsers = await UserModel.deleteMany();
+    const responsePosts = await postModel.deleteMany();
+    const responseComments = await commentModel.deleteMany();
+    return res.status(200).json({
+      success: true,
+      message: "Delete All Users With Posts &  Comments",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      success: false,
+    });
+  }
+};
+export const deleteUserByUserId = async (
+  req: Request<Params>,
+  res: Response<{ message: String; success: boolean }>
+): Promise<any> => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const result = await UserModel.deleteOne({ id: userId });
 
-
-export const deleteAllUsers=async(req:Request,res:Response<{message:String, success:boolean}>):Promise<any>=>{
-    try {
-        const resposeUsers=await UserModel.deleteMany()
-        const responsePosts=await postModel.deleteMany()
-        const responseComments=await commentModel.deleteMany()
-        return res.status(200).json({
-            success:true,
-            message:"Delete All Users With Posts &  Comments"
-        })
-        
-    } catch (error) {
-        console.log(error)
-        return res.status(500).json({
-            message:"Internal Server Error",
-            success:false
-        })
+    if (result.deletedCount === 0) {
+      return res
+        .status(404)
+        .json({ message: "User not found", success: false });
     }
-}
-export const deleteUserByUserId=async(req:Request<Params>,res:Response<{message:String,success:boolean}>):Promise<any>=>{
-    try {
-      const userId = parseInt(req.params.userId);
-      const result = await UserModel.deleteOne({ id: userId });
 
-      if (result.deletedCount === 0) {
-        return res
-          .status(404)
-          .json({ message: "User not found", success: false });
-      }
+    const userPosts = await postModel.find({ userId });
 
-     
-      const userPosts = await postModel.find({ userId });
+    await postModel.deleteMany({ userId });
 
-  
-      await postModel.deleteMany({ userId });
-
-      
-      await commentModel.deleteMany({
-        postId: { $in: userPosts.map((post: any) => post.id) },
-      });
-      return res.status(200).json({
-        success:true,
-        message:"Deleted User along with his posts and their comments"
-      })
-    } catch (error) {
-         console.log(error);
-         return res.status(500).json({
-           message: "Internal Server Error",
-           success: false,
-         });
-    }
-}
-export const addUser = async (req: Request<{},{},User>, res: Response<ErrorResponse|SuccessResponse>): Promise<any> => {
+    await commentModel.deleteMany({
+      postId: { $in: userPosts.map((post: any) => post.id) },
+    });
+    return res.status(200).json({
+      success: true,
+      message: "Deleted User along with his posts and their comments",
+    });
+  } catch (error) {
+    console.log(error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      success: false,
+    });
+  }
+};
+export const addUser = async (
+  req: Request<{}, {}, User>,
+  res: Response<ErrorResponse | SuccessResponse>
+): Promise<any> => {
   try {
     const { id } = req.body;
     const userExists = await UserModel.findOne({ id });
@@ -218,5 +215,61 @@ export const addUser = async (req: Request<{},{},User>, res: Response<ErrorRespo
   }
 };
 
+export const getUsers = async (
+  req: Request<
+    {},
+    {},
+    {},
+    {
+      page?: string;
+      limit?: string;
+      sortBy?: string;
+      postSortBy?: string;
+      sortOrder?: "asc" | "desc";
+    }
+  >,
+  res: Response<ErrorResponse | usersArray>
+): Promise<any> => {
+  try {
+    const page = parseInt(req.query.page || "1");
+    const limit = parseInt(req.query.limit || "2");
+    const skip = (page - 1) * limit;
 
+    const sortBy = req.query.sortBy || "name";
+    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+    const postSortBy = req.query.postSortBy || "title";
 
+    const total = await UserModel.countDocuments();
+
+    const users = await UserModel.find()
+      .sort({ [sortBy]: sortOrder })
+      .skip(skip)
+      .limit(limit)
+      .lean(); 
+
+    const usersWithPosts: UserWithPosts[] = await Promise.all(
+      users.map(async (user) => {
+        const posts = await postModel
+          .find({ userId: user.id })
+          .sort({ [postSortBy]: 1 })
+          .lean(); 
+        return { ...user, posts };
+      })
+    );
+
+    return res.status(200).json({
+      message: "Users with their posts fetched successfully",
+      success: true,
+      users: usersWithPosts,
+      total,
+      page,
+      limit,
+    });
+  } catch (error) {
+    console.error("Error fetching users:", error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      success: false,
+    });
+  }
+};
