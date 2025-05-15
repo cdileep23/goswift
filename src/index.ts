@@ -5,7 +5,7 @@ import userRouter from './routes/user.route'
 dotenv.config({})
 const app = express();
 
-
+app.use(express.json())
 app.use("/api", userRouter);
 app.get("/", (req: Request, res: Response): void => {
   res.send("Hello from Backend");

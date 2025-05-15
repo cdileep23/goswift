@@ -40,7 +40,6 @@ const postSchema = new mongoose.Schema<Post>(
         },
       },
     ],
-  },
-  { _id: false }
+  }
 );
 export const postModel=mongoose.model<Post>('Post',postSchema)

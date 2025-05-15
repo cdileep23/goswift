@@ -25,8 +25,7 @@ const commentSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-  },
-  { _id: false }
+  }
 );
 
 export const commentModel = mongoose.model("Comment", commentSchema);

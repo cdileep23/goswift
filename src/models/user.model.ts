@@ -18,7 +18,7 @@ const userSchema = new mongoose.Schema<User>({
   email: {
     type: String,
     required: true,
-    unique: true,
+ 
   },
   address: {
     street: {
@@ -71,8 +71,6 @@ const userSchema = new mongoose.Schema<User>({
     },
   },
  
-},{
-  _id:false
 });
 
 export const UserModel = mongoose.model<User>("User", userSchema);

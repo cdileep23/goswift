@@ -5,9 +5,93 @@ import { commentModel } from "../models/comment.model";
 import axios from "axios";
 
 import { Comment, Post, User } from "../utils/constant";
+import NodeCache from "node-cache";
+
+const cache = new NodeCache({ stdTTL: 60 * 5 });
 
 
-export const loadData = async (req:Request,res:Response):Promise<any> => {
+interface Params {
+  userId: string;
+}
+
+interface UserWithPosts extends User {
+  posts?: Post[];
+}
+
+interface SuccessResponse {
+  message: string;
+  success: true;
+  data: UserWithPosts;
+}
+
+interface ErrorResponse {
+  message: string;
+  success: false;
+}
+
+
+
+
+
+
+export const getUserByUserId = async (
+  req: Request<Params>,
+  res: Response<SuccessResponse|ErrorResponse>
+): Promise<any> => {
+  try {
+    const userId = req.params.userId;
+    const cacheKey = `user-${userId}`;
+
+   const userExists = await UserModel.findOne({ id: parseInt(userId) }).lean();
+   if (!userExists) {
+     return res.status(404).json({
+       message: "User not found",
+       success: false,
+     });
+   }
+    const cachedUser = cache.get<UserWithPosts>(cacheKey);
+    console.log(cachedUser)
+    if (cachedUser) {
+      return res.status(200).json({
+        success: true,
+        message: "Fetched User data successfully (from cache)",
+        data: cachedUser,
+      });
+    }
+
+    
+    
+
+  
+    const posts = await postModel.find({ userId: parseInt(userId) });
+
+    const data = {
+      ...userExists,
+      posts,
+    };
+
+ 
+    cache.set(cacheKey, data);
+
+    return res.status(200).json({
+      success: true,
+      message: "Fetched User data successfully",
+      data,
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      success: false,
+    });
+  }
+};
+
+
+export const loadData = async (
+  req: Request<{}, {}, {}, {}>, 
+  res: Response<{ message: string; success: boolean }>
+): Promise<any> => {
   try {
     const usersResponse = await axios.get(
       "https://jsonplaceholder.typicode.com/users"
@@ -22,13 +106,16 @@ export const loadData = async (req:Request,res:Response):Promise<any> => {
     await UserModel.deleteMany();
     await postModel.deleteMany();
     await commentModel.deleteMany();
-console.log("deleted existing one");
+    console.log("Deleted existing data");
+
     const comments: Comment[] = commentsResponse.data;
     await commentModel.insertMany(comments);
-    console.log("completed comments");
+    console.log("Inserted comments");
+
     const users: User[] = usersResponse.data;
     await UserModel.insertMany(users);
-console.log("completed User")
+    console.log("Inserted users");
+
     const posts: Post[] = postsResponse.data.map((post: any) => {
       const postComments = commentsResponse.data
         .filter((comment: any) => comment.postId === post.id)
@@ -38,26 +125,24 @@ console.log("completed User")
     });
 
     await postModel.insertMany(posts);
-console.log("completed post");
-  return res.status(200).json({
-    message: "Added Data to the Database",
-    success: true,
-  });
+    console.log("Inserted posts");
+
+    return res.status(200).json({
+      message: "Added Data to the Database",
+      success: true,
+    });
   } catch (err) {
     console.error("Error loading data:", err);
     return res.status(500).json({
-        message:"Internal Server Error",
-        success:false
-    })
+      message: "Internal Server Error",
+      success: false,
+    });
   }
 };
 
-type deleteUsers={
-    success:boolean,
-    message:string
-}
 
-export const deleteAllUsers=async(req:Request,res:Response):Promise<any>=>{
+
+export const deleteAllUsers=async(req:Request,res:Response<{message:String, success:boolean}>):Promise<any>=>{
     try {
         const resposeUsers=await UserModel.deleteMany()
         const responsePosts=await postModel.deleteMany()
@@ -75,7 +160,7 @@ export const deleteAllUsers=async(req:Request,res:Response):Promise<any>=>{
         })
     }
 }
-export const deleteUserByUserId=async(req:Request,res:Response):Promise<any>=>{
+export const deleteUserByUserId=async(req:Request<Params>,res:Response<{message:String,success:boolean}>):Promise<any>=>{
     try {
       const userId = parseInt(req.params.userId);
       const result = await UserModel.deleteOne({ id: userId });
@@ -83,7 +168,7 @@ export const deleteUserByUserId=async(req:Request,res:Response):Promise<any>=>{
       if (result.deletedCount === 0) {
         return res
           .status(404)
-          .json({ message: "User not found", sucesss: false });
+          .json({ message: "User not found", success: false });
       }
 
      
@@ -108,39 +193,30 @@ export const deleteUserByUserId=async(req:Request,res:Response):Promise<any>=>{
          });
     }
 }
-
-export const getUserByUserId=async(req:Request,res:Response):Promise<any>=>{
-    try {
-        const userId=req.params.userId
-       
-        const userExists=await UserModel.findOne({id:userId})
-     
-        if(!userExists){
-             return res
-               .status(404)
-               .json({ message: "User not found", sucesss: false });
-        }
-
-        const posts=await postModel.find({
-            userId
-        })
-
-        return res.status(200).json({
-            success:true,
-            message:"Fetched Userdata successfully",
-            data:{
-                ...userExists,
-                posts
-            }
-        })
-         
-
-
-    } catch (error) {
-          console.log(error);
-          return res.status(500).json({
-            message: "Internal Server Error",
-            success: false,
-          });
+export const addUser = async (req: Request<{},{},User>, res: Response<ErrorResponse|SuccessResponse>): Promise<any> => {
+  try {
+    const { id } = req.body;
+    const userExists = await UserModel.findOne({ id });
+    if (userExists) {
+      return res.status(400).json({
+        success: false,
+        message: "User Id already exists",
+      });
     }
-}
+    const newUser = await UserModel.create(req.body);
+    return res.status(201).json({
+      success: true,
+      message: "User created Successfully",
+      data: newUser,
+    });
+  } catch (error) {
+    console.error("Error loading data:", error);
+    return res.status(500).json({
+      message: "Internal Server Error",
+      success: false,
+    });
+  }
+};
+
+
+
