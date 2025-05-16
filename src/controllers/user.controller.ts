@@ -235,10 +235,11 @@ export const getUsers = async (
     const limit = parseInt(req.query.limit || "2");
     const skip = (page - 1) * limit;
 
-    const sortBy = req.query.sortBy || "name";
+    let sortBy = req.query.sortBy || "name";
+    sortBy=["name", "username", "email", "phone"].includes(sortBy)?sortBy:"name"
    
-    const postSortBy = req.query.postSortBy || "title";
-
+    let postSortBy = req.query.postSortBy || "title";
+postSortBy=["title", "body"].includes(postSortBy)?postSortBy:"title"
     const total = await UserModel.countDocuments();
 
     const users = await UserModel.find()
