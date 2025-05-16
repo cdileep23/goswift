@@ -225,7 +225,7 @@ export const getUsers = async (
       limit?: string;
       sortBy?: string;
       postSortBy?: string;
-      sortOrder?: "asc" | "desc";
+     
     }
   >,
   res: Response<ErrorResponse | usersArray>
@@ -236,13 +236,13 @@ export const getUsers = async (
     const skip = (page - 1) * limit;
 
     const sortBy = req.query.sortBy || "name";
-    const sortOrder = req.query.sortOrder === "desc" ? -1 : 1;
+   
     const postSortBy = req.query.postSortBy || "title";
 
     const total = await UserModel.countDocuments();
 
     const users = await UserModel.find()
-      .sort({ [sortBy]: sortOrder })
+      .sort({ [sortBy]: 1 })
       .skip(skip)
       .limit(limit)
       .lean(); 
